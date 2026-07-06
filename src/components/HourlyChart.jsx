@@ -125,6 +125,23 @@ export default function HourlyChart({ hours, unit = "°C", convert = (v) => v })
             )
         )}
 
+        {/* Rain chance: faint bars rising from the baseline (max 34px at 100%) */}
+        {pts.map(
+          (p, i) =>
+            p.precip > 0 && (
+              <rect
+                key={`pr-${p.time}`}
+                className="precip-bar"
+                x={p.x - 3.5}
+                y={baseline - (p.precip / 100) * 34}
+                width="7"
+                height={(p.precip / 100) * 34}
+                rx="2"
+                style={{ animationDelay: `${0.4 + i * 0.02}s` }}
+              />
+            )
+        )}
+
         <path key={`area-${hours[0]?.time}`} d={area} fill="url(#tempFill)" className="series-area" />
         <path key={`line-${hours[0]?.time}`} d={line} className="series-line line-draw" pathLength="1" />
 

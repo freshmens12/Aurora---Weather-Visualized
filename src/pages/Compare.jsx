@@ -144,6 +144,10 @@ export default function Compare() {
           <SearchBox compact placeholder="Pick a city…" onSelect={(c) => pick(c, "B")} />
         </div>
       </div>
+      <p className="compare-hint">
+        Search above to swap in any two cities — Manila and Singapore are just
+        the starting pair.
+      </p>
 
       {loading && (
         <div className="skeleton-wrap" aria-hidden="true">

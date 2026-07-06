@@ -32,6 +32,57 @@ export async function searchCities(query, count = 6) {
   }));
 }
 
+// Browser geolocation → a city-shaped object. Reverse-geocodes the name via
+// BigDataCloud's free client API (no key); falls back to "My location".
+export function locateMe() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation is not supported by this browser."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        const base = {
+          id: `geo-${coords.latitude.toFixed(3)}-${coords.longitude.toFixed(3)}`,
+          name: "My location",
+          region: "",
+          country: "",
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        };
+        try {
+          const res = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${coords.latitude}&longitude=${coords.longitude}&localityLanguage=en`
+          );
+          if (res.ok) {
+            const geo = await res.json();
+            resolve({
+              ...base,
+              name: geo.city || geo.locality || base.name,
+              region: geo.principalSubdivision ?? "",
+              country: geo.countryName ?? "",
+            });
+            return;
+          }
+        } catch {
+          // name lookup is best-effort; coordinates are what matter
+        }
+        resolve(base);
+      },
+      (err) => {
+        reject(
+          new Error(
+            err.code === err.PERMISSION_DENIED
+              ? "Location permission was denied. You can still search for a city."
+              : "Could not determine your location."
+          )
+        );
+      },
+      { timeout: 10000, maximumAge: 300000 }
+    );
+  });
+}
+
 export async function fetchForecast(city) {
   const params = new URLSearchParams({
     latitude: city.latitude,

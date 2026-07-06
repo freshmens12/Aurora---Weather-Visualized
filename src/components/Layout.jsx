@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle.jsx";
 import UnitToggle from "./UnitToggle.jsx";
 
@@ -26,6 +26,7 @@ const NAV = [
 ];
 
 export default function Layout() {
+  const location = useLocation();
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -64,7 +65,9 @@ export default function Layout() {
       </aside>
 
       <main className="main">
-        <Outlet />
+        <div key={location.pathname} className="page-fade">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

@@ -5,8 +5,9 @@ import HourlyChart from "../components/HourlyChart.jsx";
 import CountUp from "../components/CountUp.jsx";
 import SunArc from "../components/SunArc.jsx";
 import HeroFx from "../components/HeroFx.jsx";
-import { fetchForecast, upcomingHours } from "../lib/openMeteo.js";
+import { fetchForecast, upcomingHours, locateMe } from "../lib/openMeteo.js";
 import { describeWmo, windDirectionLabel, uvLabel } from "../lib/wmo.js";
+import { getRecentCities, rememberCity } from "../lib/recentCities.js";
 import { useToast } from "../context/ToastContext.jsx";
 import { useUnit } from "../context/UnitContext.jsx";
 
@@ -31,6 +32,17 @@ function timeOnly(iso) {
   return d.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
 }
 
+// Time-of-day mood for the hero: dawn/dusk near sunrise/sunset, else day/night.
+function heroMood(nowIso, sunriseIso, sunsetIso) {
+  const now = new Date(nowIso).getTime();
+  const rise = new Date(sunriseIso).getTime();
+  const set = new Date(sunsetIso).getTime();
+  const window = 75 * 60 * 1000;
+  if (Math.abs(now - rise) <= window) return "dawn";
+  if (Math.abs(now - set) <= window) return "dusk";
+  return now > rise && now < set ? "day" : "night";
+}
+
 function TodaySkeleton() {
   return (
     <div className="skeleton-wrap" aria-hidden="true">
@@ -51,6 +63,8 @@ export default function Today() {
   const [city, setCity] = useState(DEFAULT_CITY);
   const [forecast, setForecast] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [locating, setLocating] = useState(false);
+  const [recent, setRecent] = useState(getRecentCities);
 
   const load = useCallback(
     async (target) => {
@@ -92,10 +106,25 @@ export default function Today() {
 
   const handleSelect = (selected) => {
     setCity(selected);
+    setRecent(rememberCity(selected));
     toast.info(
       `Showing weather for ${selected.name}, ${selected.country}.`,
       "Location updated"
     );
+  };
+
+  const handleLocate = async () => {
+    setLocating(true);
+    try {
+      const here = await locateMe();
+      setCity(here);
+      setRecent(rememberCity(here));
+      toast.success(`Showing weather for ${here.name}.`, "Location found");
+    } catch (err) {
+      toast.warning(err.message, "Location unavailable");
+    } finally {
+      setLocating(false);
+    }
   };
 
   return (
@@ -107,7 +136,43 @@ export default function Today() {
             Live conditions, the next 24 hours, and the week ahead.
           </p>
         </div>
-        <SearchBox onSelect={handleSelect} />
+        <div className="search-area">
+          <div className="search-row">
+            <SearchBox onSelect={handleSelect} />
+            <button
+              type="button"
+              className="geo-btn"
+              onClick={handleLocate}
+              disabled={locating}
+              title="Use my location"
+              aria-label="Use my location"
+            >
+              {locating ? (
+                <span className="btn-spinner geo-spinner" aria-hidden="true" />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 2v3M12 19v3M2 12h3M19 12h3" strokeLinecap="round" />
+                  <circle cx="12" cy="12" r="8" />
+                </svg>
+              )}
+            </button>
+          </div>
+          {recent.length > 0 && (
+            <div className="recent-chips" aria-label="Recent cities">
+              {recent.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`chip${c.id === city.id ? " on" : ""}`}
+                  onClick={() => handleSelect(c)}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {loading && <TodaySkeleton />}
@@ -125,10 +190,10 @@ export default function Today() {
       {!loading && forecast && (
         <>
           <section
-            className={`hero-card card tint-${wmo.tint} reveal`}
+            className={`hero-card card tint-${wmo.tint} mood-${heroMood(current.time, daily.sunrise[0], daily.sunset[0])} reveal`}
             style={{ "--i": 0 }}
           >
-            <HeroFx tint={wmo.tint} night={night} />
+            <HeroFx tint={wmo.tint} />
             <div className="hero-main">
               <div className="hero-loc">
                 <span className="eyebrow">Now</span>
@@ -167,7 +232,20 @@ export default function Today() {
                 <span className="stat-label">Wind</span>
                 <span className="stat-value">
                   {Math.round(current.wind_speed_10m)} km/h{" "}
-                  <small>{windDirectionLabel(current.wind_direction_10m)}</small>
+                  <small>
+                    <svg
+                      className="wind-arrow"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      style={{ transform: `rotate(${(current.wind_direction_10m + 180) % 360}deg)` }}
+                      aria-hidden="true"
+                    >
+                      <path d="M12 19V5M12 5l-5 5M12 5l5 5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {windDirectionLabel(current.wind_direction_10m)}
+                  </small>
                 </span>
               </div>
               <div className="stat">

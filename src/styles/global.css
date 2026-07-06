@@ -599,21 +599,6 @@ input { font-family: inherit; }
   25% { opacity: 0.9; }
   100% { transform: translateY(240px) translateX(14px); opacity: 0; }
 }
-.fx-mote {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgba(251, 191, 36, 0.5);
-  filter: blur(0.5px);
-  animation: fx-float ease-in-out infinite;
-}
-.fx-clear .fx-mote { background: rgba(251, 191, 36, 0.5); }
-.fx-cloudy .fx-mote, .fx-fog .fx-mote { background: rgba(148, 163, 214, 0.45); }
-.fx-night .fx-mote { background: rgba(199, 210, 254, 0.55); }
-@keyframes fx-float {
-  0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
-  50% { transform: translateY(-14px) translateX(6px); opacity: 0.75; }
-}
 .fx-flash {
   position: absolute;
   inset: 0;
@@ -626,6 +611,93 @@ input { font-family: inherit; }
   93%, 96% { opacity: 0.7; }
   94% { opacity: 0.2; }
 }
+
+/* ─── Time-of-day hero mood ────────────────────────────────────────────── */
+.hero-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  transition: opacity 0.6s ease;
+}
+.mood-dawn::after {
+  background: linear-gradient(115deg, rgba(251, 146, 60, 0.14), rgba(251, 113, 133, 0.08) 45%, transparent 70%);
+}
+.mood-day::after {
+  background: linear-gradient(115deg, rgba(251, 191, 36, 0.07), transparent 55%);
+}
+.mood-dusk::after {
+  background: linear-gradient(115deg, rgba(251, 113, 133, 0.13), rgba(168, 85, 247, 0.10) 50%, transparent 75%);
+}
+.mood-night::after {
+  background: linear-gradient(115deg, rgba(30, 41, 99, 0.16), rgba(99, 102, 241, 0.10) 50%, transparent 75%);
+}
+:root[data-theme="dark"] .mood-night::after {
+  background: linear-gradient(115deg, rgba(99, 102, 241, 0.14), rgba(168, 85, 247, 0.08) 50%, transparent 75%);
+}
+
+/* ─── Search area: geo button + recent chips ───────────────────────────── */
+.search-area { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.search-row { display: flex; gap: 10px; align-items: center; }
+.geo-btn {
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--brand);
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.15s;
+}
+.geo-btn svg { width: 20px; height: 20px; }
+.geo-btn:hover:not(:disabled) { border-color: var(--brand); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14); transform: translateY(-1px); }
+.geo-btn:disabled { cursor: wait; }
+.geo-spinner { border-color: rgba(99, 102, 241, 0.25); border-top-color: var(--brand); }
+.recent-chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; max-width: 380px; }
+.chip {
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12.5px; font-weight: 600;
+  transition: border-color 0.18s, color 0.18s, background 0.2s, box-shadow 0.2s;
+}
+.chip:hover { border-color: var(--brand); color: var(--brand); }
+.chip.on {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(100deg, var(--brand), var(--brand-2));
+  box-shadow: 0 6px 14px rgba(99, 102, 241, 0.28);
+}
+
+/* ─── Precipitation bars (hourly chart) ────────────────────────────────── */
+.precip-bar {
+  fill: var(--brand);
+  opacity: 0;
+  animation: precip-in 0.5s ease forwards;
+}
+@keyframes precip-in { to { opacity: 0.18; } }
+
+/* ─── Wind direction arrow ─────────────────────────────────────────────── */
+.wind-arrow {
+  width: 11px; height: 11px;
+  display: inline-block;
+  vertical-align: -1px;
+  margin-right: 2px;
+  color: var(--brand);
+}
+
+/* ─── Page transition ──────────────────────────────────────────────────── */
+.page-fade { animation: page-fade-in 0.3s ease; }
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ─── Compare hint ─────────────────────────────────────────────────────── */
+.compare-hint { margin: -14px 0 22px; font-size: 13px; color: var(--ink-3); }
 
 /* ─── Side controls + unit toggle ──────────────────────────────────────── */
 .side-controls { margin-top: auto; display: flex; justify-content: center; }
@@ -659,12 +731,14 @@ input { font-family: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .reveal, .week-row .day-card, .line-draw, .series-area,
   .wx-lively .wx-sun-rays, .wx-lively .wx-sun-core, .wx-lively .wx-drop,
-  .wx-lively .wx-flake, .hero-fx > span, .fx-flash, .sun-arc-sun, .hero-icon {
+  .wx-lively .wx-flake, .hero-fx > span, .fx-flash, .sun-arc-sun, .hero-icon,
+  .precip-bar, .page-fade {
     animation: none !important;
   }
   .reveal { opacity: 1; }
   .week-row .day-card { opacity: 1; }
   .line-draw { stroke-dashoffset: 0; }
+  .precip-bar { opacity: 0.18; }
 }
 
 /* ─── Responsive ───────────────────────────────────────────────────────── */
@@ -688,6 +762,9 @@ input { font-family: inherit; }
 }
 @media (max-width: 560px) {
   .week-row { grid-template-columns: repeat(2, 1fr); }
+  .search-area { align-items: stretch; width: 100%; }
+  .search-row .searchbox { flex: 1; width: auto; }
+  .recent-chips { justify-content: flex-start; max-width: none; }
   .big-temp { font-size: 58px; }
   .hero-card { padding: 22px; }
   .panel { padding: 18px 16px 14px; }

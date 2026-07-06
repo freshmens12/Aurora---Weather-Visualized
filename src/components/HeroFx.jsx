@@ -5,7 +5,8 @@ function seeded(n, fn) {
   return Array.from({ length: n }, (_, i) => fn(i));
 }
 
-export default function HeroFx({ tint = "clear", night = false }) {
+export default function HeroFx({ tint = "clear" }) {
+  // Particles only for actual precipitation — calm skies stay calm.
   let particles = null;
 
   if (tint === "rain" || tint === "storm") {
@@ -33,23 +34,11 @@ export default function HeroFx({ tint = "clear", night = false }) {
       />
     ));
   } else {
-    // clear / cloudy / fog: slow floating motes
-    particles = seeded(10, (i) => (
-      <span
-        key={i}
-        className="fx-mote"
-        style={{
-          left: `${(i / 10) * 100 + 4}%`,
-          top: `${15 + (i % 5) * 16}%`,
-          animationDelay: `${(i % 5) * 0.9}s`,
-          animationDuration: `${5 + (i % 4)}s`,
-        }}
-      />
-    ));
+    return null;
   }
 
   return (
-    <div className={`hero-fx fx-${tint}${night ? " fx-night" : ""}`} aria-hidden="true">
+    <div className={`hero-fx fx-${tint}`} aria-hidden="true">
       {particles}
       {tint === "storm" && <span className="fx-flash" />}
     </div>
