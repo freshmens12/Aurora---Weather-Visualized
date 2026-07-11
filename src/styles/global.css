@@ -165,8 +165,26 @@ input { font-family: inherit; }
 .brand > div { min-width: 0; }
 
 /* ─── Theme toggle ─────────────────────────────────────────────────────── */
-.theme-toggle {
+.theme-toggle-wrap {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-auto {
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  transition: color 0.18s, border-color 0.18s;
+}
+.theme-auto:hover { color: var(--brand); border-color: var(--brand); }
+.theme-toggle {
   flex: 0 0 auto;
   border: 0;
   background: none;
@@ -699,6 +717,60 @@ input { font-family: inherit; }
 /* ─── Compare hint ─────────────────────────────────────────────────────── */
 .compare-hint { margin: -14px 0 22px; font-size: 13px; color: var(--ink-3); }
 
+/* ─── Weather alert banner ─────────────────────────────────────────────── */
+.alert-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 18px; margin-bottom: 18px;
+  border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 600;
+  border: 1px solid;
+}
+.alert-banner svg { flex: 0 0 auto; width: 19px; height: 19px; }
+.alert-warn {
+  color: #92600a; background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35);
+}
+.alert-bad {
+  color: #b91c1c; background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.32);
+}
+:root[data-theme="dark"] .alert-warn { color: #fbbf24; }
+:root[data-theme="dark"] .alert-bad { color: #f87171; }
+
+/* ─── "Vs yesterday" note ──────────────────────────────────────────────── */
+.delta-note { margin-top: 5px; font-size: 12.5px; font-weight: 600; color: var(--brand); }
+
+/* ─── Metric tabs (chart selectors) ────────────────────────────────────── */
+.metric-tabs {
+  display: inline-flex; gap: 2px; padding: 3px;
+  border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.metric-tab {
+  padding: 5px 13px; border: 0; border-radius: 999px;
+  background: none; color: var(--ink-3);
+  font-size: 12.5px; font-weight: 600; font-family: var(--font-body);
+  transition: color 0.2s, background 0.25s, box-shadow 0.25s;
+}
+.metric-tab:hover { color: var(--ink); }
+.metric-tab.on {
+  color: #fff;
+  background: linear-gradient(100deg, var(--brand), var(--brand-2));
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.28);
+}
+
+/* ─── World strip ──────────────────────────────────────────────────────── */
+.world-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.world-card {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 15px 8px 13px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--ink); text-align: center;
+  transition: transform 0.18s, box-shadow 0.2s, border-color 0.2s;
+}
+.world-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: rgba(99, 102, 241, 0.4); }
+.world-card strong { font-size: 17px; font-family: var(--font); }
+.world-name { font-size: 12.5px; font-weight: 650; color: var(--ink-2); }
+.world-cond { font-size: 10.5px; color: var(--ink-3); }
+
 /* ─── Side controls + unit toggle ──────────────────────────────────────── */
 .side-controls { margin-top: auto; display: flex; justify-content: center; }
 .unit-toggle {
@@ -744,6 +816,7 @@ input { font-family: inherit; }
 /* ─── Responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 1040px) {
   .week-row { grid-template-columns: repeat(4, 1fr); }
+  .world-strip { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 860px) {
   .app-shell { flex-direction: column; }
@@ -765,6 +838,8 @@ input { font-family: inherit; }
   .search-area { align-items: stretch; width: 100%; }
   .search-row .searchbox { flex: 1; width: auto; }
   .recent-chips { justify-content: flex-start; max-width: none; }
+  .world-strip { grid-template-columns: repeat(2, 1fr); }
+  .panel-head { flex-wrap: wrap; }
   .big-temp { font-size: 58px; }
   .hero-card { padding: 22px; }
   .panel { padding: 18px 16px 14px; }

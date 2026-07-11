@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import SearchBox from "../components/SearchBox.jsx";
 import WeatherIcon from "../components/WeatherIcon.jsx";
 import HourlyChart from "../components/HourlyChart.jsx";
 import CountUp from "../components/CountUp.jsx";
 import SunArc from "../components/SunArc.jsx";
 import HeroFx from "../components/HeroFx.jsx";
-import { fetchForecast, upcomingHours, locateMe } from "../lib/openMeteo.js";
-import { describeWmo, windDirectionLabel, uvLabel } from "../lib/wmo.js";
+import WorldStrip from "../components/WorldStrip.jsx";
+import { fetchForecast, upcomingHours, locateMe, yesterdayDelta } from "../lib/openMeteo.js";
+import { describeWmo, windDirectionLabel, uvLabel, weatherAlert } from "../lib/wmo.js";
 import { getRecentCities, rememberCity } from "../lib/recentCities.js";
 import { useToast } from "../context/ToastContext.jsx";
 import { useUnit } from "../context/UnitContext.jsx";
@@ -21,6 +23,14 @@ const DEFAULT_CITY = {
 };
 
 const DAY_FMT = new Intl.DateTimeFormat("en", { weekday: "short" });
+
+// Hourly chart tabs. `convert` marks values that follow the °C/°F setting.
+const METRICS = [
+  { key: "temp", label: "Temperature", getValue: (h) => h.temp, convert: true, suffix: "°" },
+  { key: "humidity", label: "Humidity", getValue: (h) => h.humidity, suffix: "%" },
+  { key: "wind", label: "Wind", getValue: (h) => h.wind, suffix: " km/h" },
+  { key: "uv", label: "UV", getValue: (h) => h.uv, suffix: "" },
+];
 
 function dayName(iso, index) {
   if (index === 0) return "Today";
@@ -43,6 +53,21 @@ function heroMood(nowIso, sunriseIso, sunsetIso) {
   return now > rise && now < set ? "day" : "night";
 }
 
+// Restore a shared city from ?city=&lat=&lon= URL params.
+function cityFromParams(sp) {
+  const lat = Number.parseFloat(sp.get("lat"));
+  const lon = Number.parseFloat(sp.get("lon"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return {
+    id: `url-${lat.toFixed(3)}-${lon.toFixed(3)}`,
+    name: sp.get("city") || "Shared location",
+    region: "",
+    country: sp.get("country") || "",
+    latitude: lat,
+    longitude: lon,
+  };
+}
+
 function TodaySkeleton() {
   return (
     <div className="skeleton-wrap" aria-hidden="true">
@@ -60,22 +85,29 @@ function TodaySkeleton() {
 export default function Today() {
   const toast = useToast();
   const unit = useUnit();
-  const [city, setCity] = useState(DEFAULT_CITY);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [city, setCity] = useState(() => cityFromParams(searchParams) ?? DEFAULT_CITY);
   const [forecast, setForecast] = useState(null);
   const [loading, setLoading] = useState(true);
   const [locating, setLocating] = useState(false);
   const [recent, setRecent] = useState(getRecentCities);
+  const [metricKey, setMetricKey] = useState("temp");
+  const abortRef = useRef(null);
 
   const load = useCallback(
     async (target) => {
+      abortRef.current?.abort(); // drop any in-flight request for an older city
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       setLoading(true);
       try {
-        const data = await fetchForecast(target);
+        const data = await fetchForecast(target, ctrl.signal);
         setForecast(data);
+        setLoading(false);
       } catch (err) {
+        if (err.name === "AbortError") return; // superseded — keep the spinner
         toast.error(err.message, "Forecast unavailable");
         setForecast(null);
-      } finally {
         setLoading(false);
       }
     },
@@ -86,11 +118,31 @@ export default function Today() {
     load(city);
   }, [city, load]);
 
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Keep the URL shareable: /today?city=Tokyo&lat=35.68&lon=139.69
+  useEffect(() => {
+    if (city.id === DEFAULT_CITY.id) {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    const params = { city: city.name, lat: String(city.latitude), lon: String(city.longitude) };
+    if (city.country) params.country = city.country;
+    setSearchParams(params, { replace: true });
+  }, [city, setSearchParams]);
+
   const current = forecast?.current;
   const daily = forecast?.daily;
   const wmo = current ? describeWmo(current.weather_code) : null;
   const night = current ? current.is_day === 0 : false;
   const hours = forecast ? upcomingHours(forecast, 24) : [];
+  const alert = forecast ? weatherAlert(hours, daily?.uv_index_max?.[0]) : null;
+  const delta = forecast ? yesterdayDelta(forecast) : null;
+  const metric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
+
+  // Values for the active chart tab (temperature respects °C/°F).
+  const chartValue = metric.convert ? (h) => unit.conv(metric.getValue(h) ?? 0) : metric.getValue;
+  const chartFmt = (v) => `${Math.round(v)}${metric.suffix}`;
 
   // Reflect the live temperature in the browser tab.
   useEffect(() => {
@@ -108,7 +160,7 @@ export default function Today() {
     setCity(selected);
     setRecent(rememberCity(selected));
     toast.info(
-      `Showing weather for ${selected.name}, ${selected.country}.`,
+      `Showing weather for ${selected.name}${selected.country ? `, ${selected.country}` : ""}.`,
       "Location updated"
     );
   };
@@ -126,6 +178,14 @@ export default function Today() {
       setLocating(false);
     }
   };
+
+  // "N° warmer/cooler than yesterday" in the active unit (delta scales, not offsets).
+  const deltaLabel = (() => {
+    if (delta == null) return null;
+    const d = unit.isF ? delta * 1.8 : delta;
+    if (Math.abs(d) < 1) return "About the same as yesterday";
+    return `${Math.abs(Math.round(d))}° ${d > 0 ? "warmer" : "cooler"} than yesterday`;
+  })();
 
   return (
     <div className="today">
@@ -189,6 +249,17 @@ export default function Today() {
 
       {!loading && forecast && (
         <>
+          {alert && (
+            <div className={`alert-banner alert-${alert.tone} reveal`} role="alert">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" aria-hidden="true">
+                <path d="M12 3.6 21.4 20H2.6L12 3.6Z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 10v4" strokeLinecap="round" />
+                <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
+              </svg>
+              <span>{alert.text}</span>
+            </div>
+          )}
+
           <section
             className={`hero-card card tint-${wmo.tint} mood-${heroMood(current.time, daily.sunrise[0], daily.sunset[0])} reveal`}
             style={{ "--i": 0 }}
@@ -219,6 +290,7 @@ export default function Today() {
                   <p className="feels">
                     Feels like {unit.temp(current.apparent_temperature)}°
                   </p>
+                  {deltaLabel && <p className="delta-note">{deltaLabel}</p>}
                 </div>
               </div>
             </div>
@@ -275,9 +347,28 @@ export default function Today() {
           <section className="card panel reveal" style={{ "--i": 1 }}>
             <div className="panel-head">
               <h3>Next 24 hours</h3>
-              <span className="panel-note">Hover the curve for details</span>
+              <div className="metric-tabs" role="tablist" aria-label="Chart metric">
+                {METRICS.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={m.key === metricKey}
+                    className={`metric-tab${m.key === metricKey ? " on" : ""}`}
+                    onClick={() => setMetricKey(m.key)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <HourlyChart hours={hours} unit={unit.symbol} convert={unit.temp} />
+            <HourlyChart
+              hours={hours}
+              getValue={chartValue}
+              fmt={chartFmt}
+              showPrecip={metric.key === "temp"}
+              ariaLabel={`Hourly ${metric.label.toLowerCase()} for the next 24 hours`}
+            />
           </section>
 
           <section className="card panel reveal" style={{ "--i": 2 }}>
@@ -311,6 +402,8 @@ export default function Today() {
               })}
             </div>
           </section>
+
+          <WorldStrip onPick={handleSelect} />
         </>
       )}
     </div>

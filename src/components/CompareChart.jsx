@@ -12,15 +12,13 @@ const COLORS = ["var(--series-1)", "var(--series-2)"];
 
 const DAY_FMT = new Intl.DateTimeFormat("en", { weekday: "short" });
 
-export default function CompareChart({ days, seriesA, seriesB, nameA, nameB, convert = (v) => v }) {
+export default function CompareChart({ days, seriesA, seriesB, nameA, nameB, fmt = (v) => `${Math.round(v)}°` }) {
   const svgRef = useRef(null);
   const [hover, setHover] = useState(null);
 
   const model = useMemo(() => {
     if (!days?.length) return null;
-    const cA = seriesA.map(convert);
-    const cB = seriesB.map(convert);
-    const all = [...cA, ...cB];
+    const all = [...seriesA, ...seriesB];
     const min = Math.floor(Math.min(...all) - 1);
     const max = Math.ceil(Math.max(...all) + 1);
     const span = Math.max(max - min, 1);
@@ -30,12 +28,12 @@ export default function CompareChart({ days, seriesA, seriesB, nameA, nameB, con
     const y = (v) => PAD.top + (1 - (v - min) / span) * ih;
     const toPts = (arr) => arr.map((v, i) => ({ x: x(i), y: y(v), v }));
     const ticks = [];
-    const step = span <= 8 ? 2 : 4;
+    const step = span <= 8 ? 2 : span <= 30 ? 4 : span <= 60 ? 10 : 20;
     for (let t = Math.ceil(min / step) * step; t <= max; t += step) {
       ticks.push({ value: t, y: y(t) });
     }
-    return { a: toPts(cA), b: toPts(cB), ticks };
-  }, [days, seriesA, seriesB, convert]);
+    return { a: toPts(seriesA), b: toPts(seriesB), ticks };
+  }, [days, seriesA, seriesB]);
 
   if (!model) return null;
   const { a, b, ticks } = model;
@@ -76,7 +74,7 @@ export default function CompareChart({ days, seriesA, seriesB, nameA, nameB, con
           <g key={t.value}>
             <line x1={PAD.left} x2={W - PAD.right} y1={t.y} y2={t.y} className="gridline" />
             <text x={PAD.left - 8} y={t.y + 4} className="axis-text" textAnchor="end">
-              {t.value}°
+              {fmt(t.value)}
             </text>
           </g>
         ))}
@@ -120,10 +118,10 @@ export default function CompareChart({ days, seriesA, seriesB, nameA, nameB, con
           }}
         >
           <strong>
-            {nameA}: {Math.round(a[hover].v)}°
+            {nameA}: {fmt(a[hover].v)}
           </strong>
           <strong>
-            {nameB}: {Math.round(b[hover].v)}°
+            {nameB}: {fmt(b[hover].v)}
           </strong>
           <span>
             {hover === 0 ? "Today" : DAY_FMT.format(new Date(`${days[hover]}T12:00:00`))}

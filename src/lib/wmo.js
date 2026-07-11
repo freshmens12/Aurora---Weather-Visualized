@@ -37,6 +37,38 @@ export function uvLabel(uv) {
   return "Extreme";
 }
 
+// Scan the next 24 hours + today's UV for conditions worth a heads-up.
+// Returns { tone: "warn" | "bad", text } or null when the sky is friendly.
+export function weatherAlert(hours, uvMax) {
+  const storm = hours.find((h) => h.code >= 95);
+  if (storm) {
+    const at = new Date(storm.time).toLocaleTimeString("en", { hour: "numeric" });
+    return {
+      tone: "bad",
+      text: `Thunderstorms expected around ${at} — plan indoor time.`,
+    };
+  }
+  const freezing = hours.find((h) => [56, 57, 66, 67].includes(h.code));
+  if (freezing) {
+    return { tone: "bad", text: "Freezing rain in the next 24 hours — icy surfaces likely." };
+  }
+  const heavySnow = hours.find((h) => [75, 86].includes(h.code));
+  if (heavySnow) {
+    return { tone: "warn", text: "Heavy snowfall expected in the next 24 hours." };
+  }
+  if (uvMax != null && uvMax >= 11) {
+    return { tone: "bad", text: `Extreme UV today (${Math.round(uvMax)}) — avoid midday sun.` };
+  }
+  if (uvMax != null && uvMax >= 8) {
+    return { tone: "warn", text: `Very high UV today (${Math.round(uvMax)}) — sunscreen strongly advised.` };
+  }
+  const soaked = hours.filter((h) => h.precip >= 80).length;
+  if (soaked >= 6) {
+    return { tone: "warn", text: "Persistent heavy rain likely through the day — bring an umbrella." };
+  }
+  return null;
+}
+
 export function aqiLabel(aqi) {
   if (aqi == null) return { text: "—", tone: "neutral" };
   if (aqi <= 20) return { text: "Good", tone: "good" };

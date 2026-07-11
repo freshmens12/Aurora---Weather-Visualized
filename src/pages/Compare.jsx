@@ -79,12 +79,22 @@ function CityColumn({ slot, accent, delay }) {
   );
 }
 
+// Daily-series options for the comparison chart.
+const COMPARE_METRICS = [
+  { key: "temperature_2m_max", label: "High temp", convert: true, suffix: "°" },
+  { key: "precipitation_probability_max", label: "Rain chance", suffix: "%" },
+  { key: "wind_speed_10m_max", label: "Wind", suffix: " km/h" },
+  { key: "uv_index_max", label: "UV", suffix: "" },
+];
+
 export default function Compare() {
   const toast = useToast();
   const unit = useUnit();
   const [slotA, setSlotA] = useState(null);
   const [slotB, setSlotB] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [metricKey, setMetricKey] = useState("temperature_2m_max");
 
   const pick = useCallback(
     async (city, side) => {
@@ -100,26 +110,32 @@ export default function Compare() {
     [toast]
   );
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const [a, b] = await Promise.all([loadCity(CITY_A), loadCity(CITY_B)]);
-        if (!alive) return;
-        setSlotA(a);
-        setSlotB(b);
-      } catch (err) {
-        if (alive) toast.error(err.message, "Could not load the comparison");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+  const loadInitial = useCallback(async () => {
+    setLoading(true);
+    setFailed(false);
+    try {
+      const [a, b] = await Promise.all([loadCity(CITY_A), loadCity(CITY_B)]);
+      setSlotA(a);
+      setSlotB(b);
+    } catch (err) {
+      toast.error(err.message, "Could not load the comparison");
+      setFailed(true);
+    } finally {
+      setLoading(false);
+    }
   }, [toast]);
 
+  useEffect(() => {
+    loadInitial();
+  }, [loadInitial]);
+
   const ready = slotA && slotB;
+  const metric = COMPARE_METRICS.find((m) => m.key === metricKey) ?? COMPARE_METRICS[0];
+  const series = (slot) => {
+    const arr = slot.forecast.daily[metric.key] ?? [];
+    return metric.convert ? arr.map(unit.conv) : arr;
+  };
+  const fmt = (v) => `${Math.round(v)}${metric.suffix}`;
 
   return (
     <div className="compare">
@@ -159,6 +175,16 @@ export default function Compare() {
         </div>
       )}
 
+      {!loading && failed && (
+        <div className="empty-block card reveal">
+          <h2>Comparison unavailable</h2>
+          <p>Neither city could be loaded. Check your connection and try again.</p>
+          <button className="btn-primary" onClick={loadInitial}>
+            Retry
+          </button>
+        </div>
+      )}
+
       {!loading && ready && (
         <>
           <div className="compare-grid">
@@ -168,16 +194,29 @@ export default function Compare() {
 
           <section className="card panel reveal" style={{ "--i": 2 }}>
             <div className="panel-head">
-              <h3>Daily high temperature — next 7 days</h3>
-              <span className="panel-note">Hover to compare day by day</span>
+              <h3>Daily {metric.label.toLowerCase()} — next 7 days</h3>
+              <div className="metric-tabs" role="tablist" aria-label="Comparison metric">
+                {COMPARE_METRICS.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={m.key === metricKey}
+                    className={`metric-tab${m.key === metricKey ? " on" : ""}`}
+                    onClick={() => setMetricKey(m.key)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <CompareChart
               days={slotA.forecast.daily.time}
-              seriesA={slotA.forecast.daily.temperature_2m_max}
-              seriesB={slotB.forecast.daily.temperature_2m_max}
+              seriesA={series(slotA)}
+              seriesB={series(slotB)}
               nameA={slotA.city.name}
               nameB={slotB.city.name}
-              convert={unit.temp}
+              fmt={fmt}
             />
           </section>
         </>

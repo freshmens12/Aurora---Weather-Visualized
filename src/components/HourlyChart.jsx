@@ -33,35 +33,40 @@ function smoothPath(pts) {
   return d;
 }
 
-export default function HourlyChart({ hours, unit = "°C", convert = (v) => v }) {
+// Metric-agnostic hourly line chart. `getValue` picks the plotted series from
+// each hour; `fmt` renders values in labels, ticks, and the tooltip.
+export default function HourlyChart({
+  hours,
+  getValue = (h) => h.temp,
+  fmt = (v) => `${Math.round(v)}°`,
+  showPrecip = true,
+  ariaLabel = "Hourly temperature for the next 24 hours",
+}) {
   const svgRef = useRef(null);
   const [hover, setHover] = useState(null);
 
   const model = useMemo(() => {
     if (!hours?.length) return null;
-    const temps = hours.map((h) => convert(h.temp));
-    const min = Math.floor(Math.min(...temps) - 1);
-    const max = Math.ceil(Math.max(...temps) + 1);
+    const values = hours.map(getValue).map((v) => v ?? 0);
+    const min = Math.floor(Math.min(...values) - 1);
+    const max = Math.ceil(Math.max(...values) + 1);
     const span = Math.max(max - min, 1);
     const iw = W - PAD.left - PAD.right;
     const ih = H - PAD.top - PAD.bottom;
-    const pts = hours.map((h, i) => {
-      const temp = convert(h.temp);
-      return {
-        x: PAD.left + (i / (hours.length - 1)) * iw,
-        y: PAD.top + (1 - (temp - min) / span) * ih,
-        ...h,
-        temp,
-      };
-    });
-    const peak = pts.reduce((a, b) => (b.temp > a.temp ? b : a), pts[0]);
+    const pts = hours.map((h, i) => ({
+      x: PAD.left + (i / (hours.length - 1)) * iw,
+      y: PAD.top + (1 - (values[i] - min) / span) * ih,
+      ...h,
+      value: values[i],
+    }));
+    const peak = pts.reduce((a, b) => (b.value > a.value ? b : a), pts[0]);
     const ticks = [];
-    const step = span <= 6 ? 2 : span <= 14 ? 4 : 6;
+    const step = span <= 6 ? 2 : span <= 14 ? 4 : span <= 40 ? 10 : 20;
     for (let t = Math.ceil(min / step) * step; t <= max; t += step) {
       ticks.push({ value: t, y: PAD.top + (1 - (t - min) / span) * ih });
     }
     return { pts, peak, ticks, line: smoothPath(pts) };
-  }, [hours, convert]);
+  }, [hours, getValue]);
 
   if (!model) return null;
   const { pts, peak, ticks, line } = model;
@@ -85,7 +90,7 @@ export default function HourlyChart({ hours, unit = "°C", convert = (v) => v })
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         role="img"
-        aria-label="Hourly temperature for the next 24 hours"
+        aria-label={ariaLabel}
       >
         <defs>
           <linearGradient id="tempFill" x1="0" y1="0" x2="0" y2="1">
@@ -104,7 +109,7 @@ export default function HourlyChart({ hours, unit = "°C", convert = (v) => v })
               className="gridline"
             />
             <text x={PAD.left - 8} y={t.y + 4} className="axis-text" textAnchor="end">
-              {t.value}°
+              {fmt(t.value)}
             </text>
           </g>
         ))}
@@ -126,30 +131,30 @@ export default function HourlyChart({ hours, unit = "°C", convert = (v) => v })
         )}
 
         {/* Rain chance: faint bars rising from the baseline (max 34px at 100%) */}
-        {pts.map(
-          (p, i) =>
-            p.precip > 0 && (
-              <rect
-                key={`pr-${p.time}`}
-                className="precip-bar"
-                x={p.x - 3.5}
-                y={baseline - (p.precip / 100) * 34}
-                width="7"
-                height={(p.precip / 100) * 34}
-                rx="2"
-                style={{ animationDelay: `${0.4 + i * 0.02}s` }}
-              />
-            )
-        )}
+        {showPrecip &&
+          pts.map(
+            (p, i) =>
+              p.precip > 0 && (
+                <rect
+                  key={`pr-${p.time}`}
+                  className="precip-bar"
+                  x={p.x - 3.5}
+                  y={baseline - (p.precip / 100) * 34}
+                  width="7"
+                  height={(p.precip / 100) * 34}
+                  rx="2"
+                  style={{ animationDelay: `${0.4 + i * 0.02}s` }}
+                />
+              )
+          )}
 
-        <path key={`area-${hours[0]?.time}`} d={area} fill="url(#tempFill)" className="series-area" />
-        <path key={`line-${hours[0]?.time}`} d={line} className="series-line line-draw" pathLength="1" />
+        <path key={`area-${hours[0]?.time}-${ariaLabel}`} d={area} fill="url(#tempFill)" className="series-area" />
+        <path key={`line-${hours[0]?.time}-${ariaLabel}`} d={line} className="series-line line-draw" pathLength="1" />
 
         {/* Direct label: the day's peak only */}
         <circle cx={peak.x} cy={peak.y} r="4.5" className="series-dot" />
         <text x={peak.x} y={peak.y - 12} className="peak-label" textAnchor="middle">
-          {Math.round(peak.temp)}
-          {unit}
+          {fmt(peak.value)}
         </text>
 
         {hover && (
@@ -174,10 +179,7 @@ export default function HourlyChart({ hours, unit = "°C", convert = (v) => v })
             top: `${(hover.y / H) * 100}%`,
           }}
         >
-          <strong>
-            {Math.round(hover.temp)}
-            {unit}
-          </strong>
+          <strong>{fmt(hover.value)}</strong>
           <span>{hover.time.slice(11) === "00:00" ? "Midnight" : formatHour(hover.time)}</span>
           <span>{hover.precip}% rain</span>
         </div>

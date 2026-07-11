@@ -10,35 +10,43 @@ import {
 const ThemeContext = createContext(null);
 const STORAGE_KEY = "aurora-theme";
 
-function getInitialTheme() {
-  if (typeof window === "undefined") return "light";
+function getStoredTheme() {
+  if (typeof window === "undefined") return null;
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored === "light" || stored === "dark") return stored;
+  return stored === "light" || stored === "dark" ? stored : null;
+}
+
+function getSystemTheme() {
+  if (typeof window === "undefined") return "light";
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
 }
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(getInitialTheme);
+  // "explicit" = the user clicked the toggle at some point; only then does
+  // their choice stick. Otherwise Aurora mirrors the OS/browser theme live.
+  const [explicit, setExplicit] = useState(() => getStoredTheme() !== null);
+  const [theme, setTheme] = useState(() => getStoredTheme() ?? getSystemTheme());
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  // Follow the OS preference unless the user has made an explicit choice.
+  // Persist only explicit choices — an untouched app keeps following the OS.
   useEffect(() => {
+    if (explicit) window.localStorage.setItem(STORAGE_KEY, theme);
+  }, [explicit, theme]);
+
+  // Live-follow the OS/browser theme until the user overrides it.
+  useEffect(() => {
+    if (explicit) return;
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!mq) return;
-    const onChange = (e) => {
-      if (!window.localStorage.getItem(STORAGE_KEY)) {
-        setTheme(e.matches ? "dark" : "light");
-      }
-    };
+    const onChange = (e) => setTheme(e.matches ? "dark" : "light");
     mq.addEventListener?.("change", onChange);
     return () => mq.removeEventListener?.("change", onChange);
-  }, []);
+  }, [explicit]);
 
   const toggle = useCallback(() => {
     // Briefly flag the <html> so global.css can run the color sweep effect.
@@ -48,12 +56,27 @@ export function ThemeProvider({ children }) {
       () => document.documentElement.removeAttribute("data-theme-anim"),
       650
     );
+    setExplicit(true);
     setTheme((t) => (t === "dark" ? "light" : "dark"));
   }, []);
 
+  // Hand control back to the OS/browser theme (clears the saved override).
+  const useSystem = useCallback(() => {
+    window.localStorage.removeItem(STORAGE_KEY);
+    setExplicit(false);
+    setTheme(getSystemTheme());
+  }, []);
+
   const api = useMemo(
-    () => ({ theme, toggle, setTheme, isDark: theme === "dark" }),
-    [theme, toggle]
+    () => ({
+      theme,
+      toggle,
+      setTheme,
+      useSystem,
+      followsSystem: !explicit,
+      isDark: theme === "dark",
+    }),
+    [theme, toggle, useSystem, explicit]
   );
 
   return (

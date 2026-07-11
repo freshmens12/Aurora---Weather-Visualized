@@ -1,11 +1,12 @@
 // Thin client for the public Open-Meteo APIs (no API key required).
 // https://open-meteo.com/
 
-async function getJson(url, label) {
+async function getJson(url, label, signal) {
   let res;
   try {
-    res = await fetch(url);
-  } catch {
+    res = await fetch(url, { signal });
+  } catch (err) {
+    if (err.name === "AbortError") throw err; // caller cancelled — not an error
     throw new Error(`Network error while loading ${label}. Are you online?`);
   }
   if (!res.ok) {
@@ -83,7 +84,7 @@ export function locateMe() {
   });
 }
 
-export async function fetchForecast(city) {
+export async function fetchForecast(city, signal) {
   const params = new URLSearchParams({
     latitude: city.latitude,
     longitude: city.longitude,
@@ -104,6 +105,9 @@ export async function fetchForecast(city) {
       "precipitation_probability",
       "weather_code",
       "is_day",
+      "relative_humidity_2m",
+      "wind_speed_10m",
+      "uv_index",
     ].join(","),
     daily: [
       "weather_code",
@@ -116,11 +120,40 @@ export async function fetchForecast(city) {
       "wind_speed_10m_max",
     ].join(","),
     forecast_days: "7",
+    past_days: "1", // yesterday's hours, for "warmer/cooler than yesterday"
   });
-  return getJson(
+  const data = await getJson(
     `https://api.open-meteo.com/v1/forecast?${params}`,
-    `the forecast for ${city.name}`
+    `the forecast for ${city.name}`,
+    signal
   );
+  // past_days also prepends yesterday to the daily arrays — drop it so
+  // daily[0] stays "today" everywhere. Hourly keeps yesterday (the delta
+  // helper needs it) and upcomingHours() already skips to the current hour.
+  if (data.daily?.time?.length > 7) {
+    for (const key of Object.keys(data.daily)) {
+      if (Array.isArray(data.daily[key])) data.daily[key] = data.daily[key].slice(1);
+    }
+  }
+  return data;
+}
+
+// Compact "current conditions" for several cities in one request
+// (Open-Meteo accepts comma-separated coordinate lists and returns an array).
+export async function fetchWorldNow(cities, signal) {
+  const params = new URLSearchParams({
+    latitude: cities.map((c) => c.latitude).join(","),
+    longitude: cities.map((c) => c.longitude).join(","),
+    timezone: "auto",
+    current: ["temperature_2m", "weather_code", "is_day"].join(","),
+  });
+  const data = await getJson(
+    `https://api.open-meteo.com/v1/forecast?${params}`,
+    "world conditions",
+    signal
+  );
+  const list = Array.isArray(data) ? data : [data];
+  return cities.map((c, i) => ({ city: c, current: list[i]?.current ?? null }));
 }
 
 export async function fetchAirQuality(city) {
@@ -139,8 +172,16 @@ export async function fetchAirQuality(city) {
 // Slice the hourly series to the next `hours` hours starting from "now"
 // in the city's local timezone (Open-Meteo returns local ISO stamps).
 export function upcomingHours(forecast, hours = 24) {
-  const { time, temperature_2m, precipitation_probability, weather_code, is_day } =
-    forecast.hourly;
+  const {
+    time,
+    temperature_2m,
+    precipitation_probability,
+    weather_code,
+    is_day,
+    relative_humidity_2m,
+    wind_speed_10m,
+    uv_index,
+  } = forecast.hourly;
   const nowIso = forecast.current.time; // e.g. "2026-07-05T14:00"
   let start = time.findIndex((t) => t >= nowIso);
   if (start === -1) start = 0;
@@ -153,7 +194,20 @@ export function upcomingHours(forecast, hours = 24) {
       precip: precipitation_probability?.[i] ?? 0,
       code: weather_code[i],
       isDay: is_day?.[i] === 1,
+      humidity: relative_humidity_2m?.[i] ?? null,
+      wind: wind_speed_10m?.[i] ?? null,
+      uv: uv_index?.[i] ?? null,
     });
   }
   return out;
+}
+
+// °C difference between now and the same hour yesterday (needs past_days: 1).
+// Returns null when yesterday's data isn't in the payload.
+export function yesterdayDelta(forecast) {
+  const { time, temperature_2m } = forecast.hourly;
+  const idx = time.findIndex((t) => t >= forecast.current.time);
+  const yIdx = idx - 24;
+  if (idx === -1 || yIdx < 0 || temperature_2m?.[yIdx] == null) return null;
+  return forecast.current.temperature_2m - temperature_2m[yIdx];
 }
