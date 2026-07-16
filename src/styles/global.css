@@ -799,6 +799,89 @@ input { font-family: inherit; }
 /* When the side-controls sit above the footer, keep the footer spacing sane. */
 .side-controls + .sidebar-foot { margin-top: 20px; }
 
+/* ─── Intro splash ─────────────────────────────────────────────────────── */
+.intro-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: #07070f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.intro-splash.out { animation: intro-out 0.5s ease-out forwards; }
+@keyframes intro-out { to { opacity: 0; } }
+
+.intro-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: intro-in 0.3s ease-out both;
+}
+@keyframes intro-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.intro-word {
+  display: flex;
+  font-family: var(--font);
+  font-weight: 900;
+  font-size: 2.25rem;
+  letter-spacing: 0.2em;
+  /* drop-shadow (not text-shadow): the gradient letters have a transparent
+     text color, and text-shadow would bleed through the glyphs. */
+  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.22));
+  user-select: none;
+}
+@media (min-width: 768px) {
+  .intro-word { font-size: 3.75rem; }
+}
+.intro-ch {
+  display: inline-block;
+  width: 1.15ch;
+  text-align: center;
+}
+.intro-ch.solid { color: #fff; }
+.intro-ch.grad {
+  background: linear-gradient(90deg, #818cf8, #e879f9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.intro-reflect {
+  transform: scaleY(-1);
+  margin-top: 0.3em;
+  opacity: 0.45;
+  filter: blur(1.5px); /* replaces the glow — reflections don't cast light */
+  /* scaleY(-1) flips this mask with the element, so "opaque at the bottom,
+     gone by 60% up" renders as: strongest right under the real letters,
+     dissolving downward like a floor reflection. */
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, transparent 60%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.intro-tag {
+  margin-top: 20px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.45em;
+  text-indent: 0.45em; /* re-center: tracking adds space after the last glyph */
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+  opacity: 0;
+  animation: intro-tag-in 0.6s ease-out 0.9s forwards;
+}
+@keyframes intro-tag-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* ─── Reduced motion ───────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .reveal, .week-row .day-card, .line-draw, .series-area,
